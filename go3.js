@@ -1,62 +1,55 @@
 const express = require('express');
 const axios = require('axios');
+const crypto = require('crypto');
+const https = require('https');
 
 const app = express();
 const PORT = 3000;
 
+/* =========================
+   HTTPS AGENT (KEEP ALIVE)
+========================= */
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 15000,
+  maxSockets: 50
+});
+
+/* =========================
+   LOGIN
+========================= */
 app.get('/login', async (req, res) => {
+  const { user, pass } = req.query;
+
+  if (!user || !pass) {
+    return res.status(400).json({ error: 'user y pass son requeridos' });
+  }
+
   try {
-    // 1️⃣ Leer query
-    const username = decodeURIComponent(req.query.user ?? '');
-    const password = decodeURIComponent(req.query.pass ?? '');
-
-    if (!username || !password) {
-      return res.status(400).json({
-        error: 'user y pass son requeridos'
-      });
-    }
-
-    // 2️⃣ Body JSON (ANDROID)
-    const body = {
-      login: username,
-      password: password,
-      captcha: '',
-      rememberMe: true
-    };
-
-    // 3️⃣ Headers ANDROID reales
-    const headers = {
-      Host: 'go3.lv',
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Encoding': 'gzip',
-      'Content-Type': 'application/json',
-      'API-CorrelationId': 'mobile_4f6f74f3c7bf8f1f61f7e0b515f4b97c',
-      'API-DeviceUid': '629085d9dbedcb88',
-      'API-DeviceInfo': 'SM-S9180;32;android;12;samsung;2.2.2.471;',
-      'User-Agent': 'okhttp/4.12.0',
-      'Connection': 'keep-alive'
-    };
-
-    // 4️⃣ POST directo a GO3 (ANDROID)
     const response = await axios.post(
       'https://go3.lv/api/subscribers/login?tenant=OM_LV&lang=LV&platform=ANDROID',
-      body,
       {
-        headers,
-        validateStatus: () => true
+        login: user,
+        password: pass,
+        captcha: '',
+        rememberMe: true
+      },
+      {
+        httpsAgent,
+        timeout: 15000,
+        validateStatus: s => s < 500,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'okhttp/4.12.0',
+          'API-DeviceUid': crypto.randomUUID(),
+          'API-CorrelationId': `mobile_${crypto.randomBytes(16).toString('hex')}`,
+          'API-DeviceInfo': 'SM-S9180;32;android;12;samsung;'
+        }
       }
     );
 
-    // 5️⃣ Respuesta cruda
-    res.status(response.status).json({
-      request: {
-        username,
-        body
-      },
-      go3Status: response.status,
-      go3Headers: response.headers,
-      go3Response: response.data
-    });
+    res.status(response.status).json(response.data);
 
   } catch (err) {
     res.status(500).json({
@@ -66,6 +59,9 @@ app.get('/login', async (req, res) => {
   }
 });
 
+/* =========================
+   SERVER
+========================= */
 app.listen(PORT, () => {
-  console.log(`🔥 Server listo en http://localhost:${PORT}/login`);
+  console.log(`Servidor Actualizado 07/02/26 http://localhost:${PORT}/login`);
 });
